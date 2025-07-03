@@ -9,12 +9,43 @@ headers = {
 
 class WebsiteService:
 
-    @staticmethod
-    def extract_content_from_url(url):
+    def extract_article_links(self, url):
         response = requests.get(url, headers=headers)
         soup = BeautifulSoup(response.content, 'html.parser')
-        title = soup.title.string if soup.title else "No title found"
+        links = set()
+
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+
+            # crude filter to avoid ads, navigation etc.
+            if any(x in href for x in ["/202", "/news", "/article", "/world"]) and not href.startswith("#"):
+                full_url = href if href.startswith("http") else requests.compat.urljoin(url, href)
+                links.add(full_url)
+
+        return list(links)
+    
+    def extract_content_from_url(self, url):
+        response = requests.get(url, headers=headers)
+        soup = BeautifulSoup(response.content, 'html.parser')
         for tag in soup.body(["script", "style", "img", "input"]):
             tag.decompose()
         text = soup.body.get_text(separator="\n", strip=True)
-        return title, text
+        return text
+    
+
+    def extract_articles_from_homepage(self, url, maximum_news):
+        article_links = self.extract_article_links(url)[:maximum_news]
+        articles = []
+
+        for link in article_links:
+            try:
+                text = self.extract_content_from_url(link)
+                if len(text.split()) > 100:  # crude filter: avoid blank or nav pages
+                    articles.append({
+                        "url": link,
+                        "content": text
+                    })
+            except Exception as e:
+                continue  # skip failed ones
+
+        return articles
