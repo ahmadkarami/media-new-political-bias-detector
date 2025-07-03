@@ -16,8 +16,7 @@ import requests
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from jwt import ExpiredSignatureError, InvalidTokenError
-
-from controllers.websiteController import WebsiteController
+from services.websiteService import WebsiteService
 
 # If you get an error running this cell, then please head over to the troubleshooting notebook!
 class UrlsRequest(BaseModel):
@@ -31,7 +30,9 @@ app = FastAPI(
 )
 
 load_dotenv()
-JWT_SECRET = os.getenv("JWT_SECRET")
+GEN_MODEL = os.getenv("GEN_MODEL")
+BASE_URL = os.getenv("BASE_URL")
+CHATBOT_API_KEY = os.getenv("CHATBOT_API_KEY")
 
 # --- Pydantic Models ---
 class Message(BaseModel):
@@ -40,65 +41,53 @@ class Message(BaseModel):
     def model_dump(self) -> Dict[str, str]:
         return {"qu": self.qu, "an": self.an}
 
-class QuestionRequest(BaseModel):
-    question: str
-    chat_summary: str = ""
-    recent_messages: List[Message] = []
-    
-class ImageQuestionRequest(BaseModel):
-    image_id: str
-    user_id: str
-    question: str
-    chat_summary: str = ""
-    recent_messages: List[Message] = []
-
 # --- API Endpoints ---
 @app.get("/", summary="Welcome message", description="Returns a welcome message for the RAG-based chatbot.")
 def chat_bot_info():
-    return 'Welcome to RAG-Based chatbot. please go to /docs for Swagger'
+    return 'Welcome to RAG-Based chatbot.'
 
-
-@app.post("/api/extract-web-text")
-async def extract_web_text(data: UrlsRequest) -> List[Dict[str, Any]]:
+@app.post("/api/analyze-news")
+async def analyze_news(data: UrlsRequest) -> List[Dict[str, Any]]:
     try:
-        controller = WebsiteController()
-        results = []
-
-        for url in data.urls:
-            title, text = controller.extract_text(url)
-            results.append({
-                "url": url,
-                "text": text
-            })
-
-        return results
-
-    except Exception as e:
-        logging.error("Error in extract_web_text: %s", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/summarize-web-text")
-async def summarize_web_text(data: UrlsRequest) -> List[Dict[str, Any]]:
-    try:
-        controller = WebsiteController()
+        service = WebsiteService()  # instantiate the class
         results = []
         responses = []
-        openai = OpenAI(api_key="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", base_url="https://openrouter.ai/api/v1")
+        openai = OpenAI(api_key=CHATBOT_API_KEY, base_url=BASE_URL)
 
         for url in data.urls:
-            title, text = controller.extract_text(url)
-            results.append({
-                "url": url,
-                "text": text
-            })
+            articles = service.extract_articles_from_homepage(url,2)
+
+            for article in articles:
+                results.append({
+                    "url": article["url"],
+                    "text": article["content"]
+                })
             
         # Extract just the text
         for entry in results:
             messages = [
-                {"role": "system", "content": "You are a snarky assistant who summarizes news articles with wit and clarity. Your tone is clever but factual. Condense the article into 3–5 short sentences, capturing key facts, names, dates, and why it matters — while throwing in a bit of attitude, ignoring text that might be navigation related. Respond in markdown."},
-                {"role": "user", "content": "The contents of this website is as follows; lease provide a short summary of this website in markdown. If it includes news or announcements, then summarize these too. " + entry["text"]}
+                {
+                "role": "system",
+                "content": (
+                    "You are a senior political linguistics and media analysis expert.\n\n"
+                    "Analyze the following news text and answer in structured JSON:\n\n"
+                    "1. **event_summary**: What is the main event or action described in this news text? Summarize it in one sentence.\n"
+                    "2. **event_valence**: Is this event objectively positive or negative? (Choose only 'positive' or 'negative')\n"
+                    "3. **text_sentiment**: What is the overall tone and sentiment of the text? (Choose one: 'positive', 'neutral', 'negative')\n"
+                    "4. **consistency**: Does the sentiment of the text match the objective valence of the event? (Choose 'consistent' or 'inconsistent')\n"
+                    "5. **bias_interpretation**: If inconsistent, what does this indicate about the political or ideological bias of the news agency? Who benefits from this framing?\n\n"
+                    "Respond in valid JSON format. Do not include any commentary or explanation outside the JSON block."
+                    )
+                },
+                {
+                "role": "user",
+                "content": (
+                    "Here is the news text:\n"
+                    "\"\"\"\n" + entry["text"] + "\n\"\"\""
+                    )
+                }
             ]
-            response = openai.chat.completions.create(model="deepseek/deepseek-r1:free", messages=messages)
+            response = openai.chat.completions.create(model=GEN_MODEL, messages=messages)
             responses.append({
                 "url":  entry["url"],
                 "summary": response.choices[0].message.content
