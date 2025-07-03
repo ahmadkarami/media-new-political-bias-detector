@@ -1,0 +1,21 @@
+name: pet24-7
+
+services:
+  rag_server:
+    image: 'rag_server:latest'
+    container_name: rag_server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+      - ./src/public/DB:/app/public/DB             # Mount ChromaDB persistence folder
+      - ./src/public/prompts:/app/public/prompts   # Mount prompt folders
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/src
