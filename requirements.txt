@@ -1,0 +1,32 @@
+# Core dependencies
+fastapi
+uvicorn
+pydantic
+openai
+anyio
+starlette
+python-multipart
+
+# LangChain and vector store ecosystem (modular packages)
+langchain>=0.2.2               # Core logic (you already have it, just version bump)
+langchain-huggingface         # Replaces deprecated HuggingFaceEmbeddings
+langchain-chroma              # Replaces deprecated Chroma
+
+# Embeddings and models
+sentence-transformers         # Needed for HuggingFace embeddings
+
+# OCR and image tools
+pytesseract
+Pillow
+pdf2image
+
+# extras
+python-dotenv
+gradio
+langchain-community
+python-multipart
+chromadb
+PyJWT
+unstructured
+markdown
+beautifulsoup4
