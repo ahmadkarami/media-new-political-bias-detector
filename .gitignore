@@ -1,0 +1,20 @@
+# Ignore Python virtual environment
+.venv/
+.env
+
+# Ignore compiled Python files
+__pycache__/
+*.py[cod]
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore log files
+*.log
+
+# Ignore log files
+*.docx
+
+# ignore the database
+public/DB/
